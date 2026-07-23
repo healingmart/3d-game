@@ -2119,8 +2119,24 @@ html,body{width:100%;height:100%;min-height:0!important;margin:0;overflow:hidden
 <strong>이어하기</strong><span id="continue-copy">저장된 게임을 계속합니다.</span>
 </button>
 <div class="start-setting-row"><button id="menu-sound" type="button">회전음 켜짐</button><button id="menu-vibration" type="button">진동 켜짐</button></div>
-<button class="start-guide-button" id="guide-menu" type="button">처음이라면 · 30초 설명</button><a aria-label="3×3 큐브 초보 해법 블로그 보기" class="start-solve-link" href="https://www.healing-mart.com/2026/07/cube.html" target="_top">초보 해법 전체 보기</a>
-<div class="record-row compact-records">
+
+<button class="start-guide-button" id="guide-menu" type="button">
+  처음이라면 · 30초 설명
+</button>
+
+<a
+  class="start-solve-link"
+  href="https://www.rubiks.com/solution-guides"
+  target="_blank"
+  rel="noopener noreferrer external"
+  aria-label="Rubik’s 공식 3×3 큐브 공략 새 창에서 보기"
+>
+  공식 3×3 공략 보기
+</a>
+
+  
+  
+  <div class="record-row compact-records">
 <div class="record"><small>최고 기록</small><b id="menu-best-time">--</b></div>
 <div class="record"><small>최소 이동</small><b id="menu-best-moves">--</b></div>
 <div class="record"><small>완성</small><b id="menu-clear-count">0</b></div>
@@ -2253,13 +2269,1530 @@ html,body{width:100%;height:100%;min-height:0!important;margin:0;overflow:hidden
   },9000);
 })();
 </script>
-<script type="module" src="https://healingmart.github.io/hm-mini-game-dist/hm-cube.7c7359ed.min.js"></script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js";
+
+const IS_MOBILE_DEVICE = matchMedia("(max-width:900px)").matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+(() => {
+  "use strict";
+
+  const $ = (s) => document.querySelector(s);
+  const $$ = (s) => [...document.querySelectorAll(s)];
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const root = $("#hm-cube-game");
+  const canvas = $("#game-canvas");
+  const effectCanvas = $("#effect-canvas");
+  const effectCtx = effectCanvas.getContext("2d");
+  const launch = $("#launch");
+  const menuOverlay = $("#menu-overlay");
+  const resultOverlay = $("#result-overlay");
+  const moveCountEl = $("#move-count");
+  const timeCountEl = $("#time-count");
+  const bestCountEl = $("#best-count");
+  const menuBestTimeEl = $("#menu-best-time");
+  const menuBestMovesEl = $("#menu-best-moves");
+  const menuClearCountEl = $("#menu-clear-count");
+  const continueBtn = $("#continue-btn");
+  const continueCopy = $("#continue-copy");
+  const soundBtn = $("#sound-btn");
+  const vibrationBtn = $("#vibration-btn");
+  const menuSoundBtn = $("#menu-sound");
+  const menuVibrationBtn = $("#menu-vibration");
+  const faceHint = $("#face-hint");
+  const toast = $("#toast");
+  const orientationEls = {
+    up:$("#ori-up"),down:$("#ori-down"),left:$("#ori-left"),right:$("#ori-right"),front:$("#ori-front"),back:$("#ori-back")
+  };
+  const toolsBtn = $("#tools-btn");
+  const toolSheet = $("#tool-sheet");
+  const settingsBtn = $("#settings-btn");
+  const settingsSheet = $("#settings-sheet");
+  const settingsSheetClose = $("#settings-sheet-close");
+  const resetRecordsBtn = $("#reset-records-btn");
+  const settingsBestTimeEl = $("#settings-best-time");
+  const settingsBestMovesEl = $("#settings-best-moves");
+  const settingsClearCountEl = $("#settings-clear-count");
+  const toolSheetBackdrop = $("#tool-sheet-backdrop");
+  const firstPlayGuide = $("#first-play-guide");
+  const shareBtn = $("#hm-mobile-share");
+  const shareBackdrop = $("#hm-share-backdrop");
+  const shareSheet = $("#hm-share-sheet");
+  const shareCloseBtn = $("#hm-share-close");
+  const hintSheet = $("#hint-sheet");
+  const hintSheetClose = $("#hint-sheet-close");
+  const hintSheetBottomClose = $("#hint-sheet-bottom-close");
+  const hintPreviewBtn = $("#hint-preview-btn");
+  const guideOverlay = $("#guide-overlay");
+
+  let drawerCloseTimer=0;
+  function setToolsButtonState(open){toolsBtn.setAttribute("aria-expanded",open?"true":"false")}
+  function setSettingsButtonState(open){settingsBtn?.setAttribute("aria-expanded",open?"true":"false")}
+  function sheetIsOpen(sheet){return !!sheet && !sheet.hidden && sheet.classList.contains("is-open")}
+  function activeBottomPanel(){
+    if(sheetIsOpen(toolSheet))return toolSheet;
+    if(sheetIsOpen(settingsSheet))return settingsSheet;
+    if(sheetIsOpen(hintSheet))return hintSheet;
+    if(!guideOverlay.classList.contains("hidden"))return guideOverlay.querySelector(".korean-manual");
+    if(shareSheet?.classList.contains("show"))return shareSheet;
+    return null;
+  }
+  function syncDrawerViewport(){
+    const panel=activeBottomPanel();
+    root.classList.toggle("drawer-open",!!panel);
+    state.drawerLift=0;
+    let panelSpace=0;
+    if(panel){
+      const limit=Math.min(root.clientHeight*.38,310);
+      panelSpace=Math.min(Math.max(panel.scrollHeight||panel.getBoundingClientRect().height||0,120),limit)+8;
+    }
+    root.style.setProperty("--hm-panel-space",`${Math.round(panelSpace)}px`);
+    requestAnimationFrame(resize);
+  }
+  function hideSheet(sheet,immediate=false){
+    if(!sheet)return;
+    sheet.classList.remove("is-open");sheet.setAttribute("aria-hidden","true");
+    if(immediate)sheet.hidden=true;else window.setTimeout(()=>{if(!sheet.classList.contains("is-open"))sheet.hidden=true},230);
+  }
+  function showSheet(sheet){
+    if(!sheet)return;
+    sheet.hidden=false;sheet.setAttribute("aria-hidden","false");
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{sheet.classList.add("is-open");syncDrawerViewport()}));
+  }
+  let settingsResumeTimer=false;
+  function closeBottomPanels(immediate=false){
+    const closingSettings=sheetIsOpen(settingsSheet);
+    clearTimeout(drawerCloseTimer);hideSheet(toolSheet,immediate);hideSheet(settingsSheet,immediate);hideSheet(hintSheet,immediate);
+    root.classList.remove("tools-open");setToolsButtonState(false);setSettingsButtonState(false);toolSheetBackdrop.hidden=true;
+    if(closingSettings&&settingsResumeTimer&&state.active){startTimer()}
+    settingsResumeTimer=false;
+    drawerCloseTimer=window.setTimeout(syncDrawerViewport,immediate?0:240);
+  }
+  function openToolSheet(){
+    closeBottomPanels(true);closeShareSheet?.();
+    root.classList.add("tools-open");setToolsButtonState(true);showSheet(toolSheet);
+  }
+  function toggleToolSheet(){sheetIsOpen(toolSheet)?closeBottomPanels():openToolSheet()}
+  function openSettingsSheet(){
+    const wasRunning=state.timerRunning;
+    closeBottomPanels(true);closeShareSheet?.();
+    settingsResumeTimer=wasRunning;
+    if(wasRunning)pauseTimer();
+    updateRecordUI();setSettingsButtonState(true);showSheet(settingsSheet);
+  }
+  function toggleSettingsSheet(){sheetIsOpen(settingsSheet)?closeBottomPanels():openSettingsSheet()}
+  function openHintDrawer(){closeBottomPanels(true);closeShareSheet?.();showSheet(hintSheet)}
+  function closeHintDrawer(){hideSheet(hintSheet);window.setTimeout(syncDrawerViewport,235)}
+
+  const GUIDE_FACE = {
+    U:{ko:"윗면",color:"#f7f7f4",ink:"#101820"},D:{ko:"아랫면",color:"#ffd600",ink:"#101820"},
+    L:{ko:"왼쪽 면",color:"#ff8f00",ink:"#ffffff"},R:{ko:"오른쪽 면",color:"#e53935",ink:"#ffffff"},
+    F:{ko:"앞면",color:"#00a651",ink:"#ffffff"},B:{ko:"뒷면",color:"#1557d6",ink:"#ffffff"}
+  };
+  function guideTokenParts(token){
+    const base=token.charAt(0);return {base,prime:token.includes("'")||token.includes("′"),double:token.includes("2")};
+  }
+  function guideMoveSVG(token){
+    const p=guideTokenParts(token),f=GUIDE_FACE[p.base]||GUIDE_FACE.F;
+    const cells=[];for(let r=0;r<3;r++)for(let c=0;c<3;c++)cells.push(`<rect x="${18+c*16}" y="${12+r*16}" width="14" height="14" rx="2.8" fill="${f.color}" stroke="rgba(0,0,0,.38)" stroke-width="1"/>`);
+    const path=p.prime?"M24 66 C38 76 58 72 66 57":"M66 66 C52 76 32 72 24 57";
+    const head=p.prime?"M64 56 l3 9 l-9 -2":"M26 56 l-3 9 l9 -2";
+    return `<svg viewBox="0 0 84 82" aria-hidden="true"><rect x="13" y="7" width="58" height="58" rx="10" fill="#071018" stroke="rgba(255,255,255,.18)"/>${cells.join("")}<path d="${path}" fill="none" stroke="#78e8ff" stroke-width="3.4" stroke-linecap="round"/><path d="${head}" fill="none" stroke="#78e8ff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>${p.double?'<text x="42" y="79" text-anchor="middle" fill="#ffd56a" font-size="12" font-weight="900">180°</text>':''}</svg>`;
+  }
+  function guideMoveCard(token){
+    const p=guideTokenParts(token),f=GUIDE_FACE[p.base]||GUIDE_FACE.F;
+    const display=token.replace(/'/g,"′");
+    const action=p.double?"같은 면 두 번":(p.prime?"반시계로 한 번":"시계로 한 번");
+    return `<div class="guide-move">${guideMoveSVG(token)}<strong>${display}</strong><em>${f.ko}</em><span>${action}</span></div>`;
+  }
+  function renderGuide(){
+    $$(".algorithm-sequence[data-alg]").forEach(el=>{el.innerHTML=el.dataset.alg.trim().split(/\s+/).filter(Boolean).map(guideMoveCard).join("")});
+    const colors={W:"#f7f7f4",Y:"#ffd600",G:"#00a651",R:"#e53935",O:"#ff8f00",B:"#1557d6",".":"#263744"};
+    $$(".goal-grid[data-pattern]").forEach(el=>{let p=(el.dataset.pattern||"").replace(/\s/g,"").slice(0,9).padEnd(9,".");el.innerHTML=[...p].map(ch=>`<i style="background:${colors[ch]||colors['.']}"></i>`).join("")});
+  }
+
+  const KEY = {
+    settings: "hmCubeMatch.settings.v4.2",
+    save: "hmCubeMatch.save.v3",
+    records: "hmCubeMatch.records.v3"
+  };
+
+  const MOVE = {
+    U: {axis:"y", layer: 1, angle:-Math.PI/2},
+    D: {axis:"y", layer:-1, angle: Math.PI/2},
+    L: {axis:"x", layer:-1, angle: Math.PI/2},
+    R: {axis:"x", layer: 1, angle:-Math.PI/2},
+    F: {axis:"z", layer: 1, angle:-Math.PI/2},
+    B: {axis:"z", layer:-1, angle: Math.PI/2},
+    M: {axis:"x", layer: 0, angle: Math.PI/2},
+    E: {axis:"y", layer: 0, angle: Math.PI/2},
+    S: {axis:"z", layer: 0, angle:-Math.PI/2}
+  };
+
+  const FACE_COLOR = {
+    px:0xe53935,
+    nx:0xff8f00,
+    py:0xf7f7f4,
+    ny:0xffd600,
+    pz:0x00a651,
+    nz:0x1557d6
+  };
+  const FACE_INFO = {
+    px:{move:"R",ko:"오른쪽 면",short:"오른쪽",color:"#e53935",text:"#ffffff"},
+    nx:{move:"L",ko:"왼쪽 면",short:"왼쪽",color:"#ff8f00",text:"#ffffff"},
+    py:{move:"U",ko:"윗면",short:"윗면",color:"#f7f7f4",text:"#111820"},
+    ny:{move:"D",ko:"아랫면",short:"아랫면",color:"#ffd600",text:"#111820"},
+    pz:{move:"F",ko:"앞면",short:"앞면",color:"#00a651",text:"#ffffff"},
+    nz:{move:"B",ko:"뒷면",short:"뒷면",color:"#1557d6",text:"#ffffff"}
+  };
+  const AXIS_VECTOR = {
+    x:new THREE.Vector3(1,0,0),y:new THREE.Vector3(0,1,0),z:new THREE.Vector3(0,0,1)
+  };
+
+  const state = {
+    modeScramble:12,
+    history:[],
+    moves:0,
+    hints:0,
+    elapsed:0,
+    startedAt:0,
+    timerRunning:false,
+    active:false,
+    turning:false,
+    orbiting:false,
+    demoRunning:false,
+    demoPaused:false,
+    demoAbort:false,
+    demoSpeed:1,
+    demoToken:0,
+    settings:{sound:true,vibration:false},
+    records:{bestTime:0,bestMoves:0,clears:0},
+    cubies:[],
+    solvedFaces:new Set(),
+    particles:[],
+    lastOrientationText:"",
+    lastOrientationAt:0,
+    lastFrame:performance.now(),
+    drawerLift:0
+  };
+
+  function safeParse(value, fallback){
+    try{return JSON.parse(value) ?? fallback}catch{return fallback}
+  }
+
+  // Blogger의 외부 iframe이나 강화된 개인정보 보호 모드에서는
+  // localStorage가 차단될 수 있습니다. 저장이 불가능해도 게임 실행은 유지합니다.
+  function storageGet(key){
+    try{return window.localStorage.getItem(key)}catch{return null}
+  }
+  function storageSet(key,value){
+    try{window.localStorage.setItem(key,value);return true}catch{return false}
+  }
+  function storageRemove(key){
+    try{window.localStorage.removeItem(key);return true}catch{return false}
+  }
+
+  function loadLocal(){
+    state.settings = Object.assign(state.settings, safeParse(storageGet(KEY.settings), {}));
+    delete state.settings["material"];
+    state.records = Object.assign(state.records, safeParse(storageGet(KEY.records), {}));
+    updateSettingsUI();
+    updateRecordUI();
+    refreshContinueUI();
+  }
+
+  function saveSettings(){
+    storageSet(KEY.settings, JSON.stringify(state.settings));
+  }
+
+  function saveRecords(){
+    storageSet(KEY.records, JSON.stringify(state.records));
+  }
+
+  function saveGame(){
+    if(!state.active) return;
+    storageSet(KEY.save, JSON.stringify({
+      modeScramble:state.modeScramble,
+      history:state.history,
+      moves:state.moves,
+      hints:state.hints,
+      elapsed:getElapsed()
+    }));
+  }
+
+  function clearSave(){
+    storageRemove(KEY.save);
+    continueBtn.hidden = true;
+  }
+
+  function refreshContinueUI(){
+    const saved = safeParse(storageGet(KEY.save), null);
+    const valid = !!(saved && Array.isArray(saved.history) && saved.history.length);
+    continueBtn.hidden = !valid;
+    if(valid){
+      const moveText = Number.isFinite(saved.moves) ? `${saved.moves}수` : `${saved.history.length}수`;
+      const timeText = formatTime(Number(saved.elapsed) || 0);
+      continueCopy.textContent = `${moveText} · ${timeText} 지점에서 계속`;
+    }else{
+      continueCopy.textContent = "저장된 게임이 없습니다";
+    }
+  }
+
+  function formatTime(ms){
+    const total = Math.floor(ms/1000);
+    const m = Math.floor(total/60).toString().padStart(2,"0");
+    const s = (total%60).toString().padStart(2,"0");
+    return `${m}:${s}`;
+  }
+
+  function getElapsed(){
+    return state.elapsed + (state.timerRunning ? performance.now()-state.startedAt : 0);
+  }
+
+  function startTimer(){
+    if(state.timerRunning) return;
+    state.startedAt = performance.now();
+    state.timerRunning = true;
+  }
+
+  function pauseTimer(){
+    if(!state.timerRunning) return;
+    state.elapsed += performance.now()-state.startedAt;
+    state.timerRunning = false;
+  }
+
+  function resetTimer(ms=0){
+    state.elapsed = ms;
+    state.startedAt = performance.now();
+    state.timerRunning = false;
+  }
+
+  function updateHUD(){
+    moveCountEl.textContent = String(state.moves);
+    timeCountEl.textContent = formatTime(getElapsed());
+    bestCountEl.textContent = state.records.bestTime ? formatTime(state.records.bestTime) : "--";
+  }
+
+  function updateRecordUI(){
+    const bestTimeText=state.records.bestTime ? formatTime(state.records.bestTime) : "--";
+    const bestMovesText=state.records.bestMoves ? String(state.records.bestMoves) : "--";
+    const clearsText=String(state.records.clears || 0);
+    menuBestTimeEl.textContent = bestTimeText;
+    menuBestMovesEl.textContent = bestMovesText;
+    menuClearCountEl.textContent = clearsText;
+    bestCountEl.textContent = bestTimeText;
+    if(settingsBestTimeEl)settingsBestTimeEl.textContent=bestTimeText;
+    if(settingsBestMovesEl)settingsBestMovesEl.textContent=bestMovesText;
+    if(settingsClearCountEl)settingsClearCountEl.textContent=clearsText;
+  }
+
+  function resetPersonalRecords(){
+    const hasRecord=!!(state.records.bestTime||state.records.bestMoves||state.records.clears);
+    if(!hasRecord){showToast("초기화할 기록이 없습니다");return}
+    if(!window.confirm("내 최고 기록을 모두 초기화할까요? 현재 진행 중인 큐브는 유지됩니다."))return;
+    state.records={bestTime:0,bestMoves:0,clears:0};
+    saveRecords();updateRecordUI();showToast("최고 기록을 초기화했습니다");
+  }
+
+  function updateSettingsUI(){
+    const soundOn = !!state.settings.sound;
+    const vibrationOn = !!state.settings.vibration;
+    soundBtn.classList.toggle("off",!soundOn);
+    vibrationBtn.classList.toggle("off",!vibrationOn);
+    soundBtn.textContent = soundOn ? "🔊 사운드 ON" : "🔇 사운드 OFF";
+    vibrationBtn.textContent = vibrationOn ? "📳 진동 ON" : "📳 진동 OFF";
+    menuSoundBtn.classList.toggle("on",soundOn);
+    menuVibrationBtn.classList.toggle("on",vibrationOn);
+    menuSoundBtn.textContent = soundOn ? "🔊 사운드 켜짐" : "🔇 사운드 켜기";
+    menuVibrationBtn.textContent = vibrationOn ? "📳 진동 켜짐" : "📳 진동 켜기";
+  }
+
+  function vibrate(pattern=8){
+    if(state.settings.vibration && navigator.vibrate) navigator.vibrate(pattern);
+  }
+
+  // Single rotation sound used for manual turns and the opening scramble.
+  const CUBE_SOUND_URL = "https://healingmart.github.io/hm-mini-game-sound-pack/sfx/core/v1/cube.mp3";
+  const cubeAudio = new Audio(CUBE_SOUND_URL);
+  cubeAudio.preload = "auto";
+  cubeAudio.volume = .72;
+  cubeAudio.playsInline = true;
+  cubeAudio.load();
+  const tactileAudio = {
+    unlocked:false,
+    lastAt:0,
+    unlock(){
+      if(this.unlocked) return;
+      try{
+        cubeAudio.currentTime=0;
+        cubeAudio.volume=0;
+        const playPromise=cubeAudio.play();
+        this.unlocked=true;
+        if(playPromise&&typeof playPromise.catch==="function"){
+          playPromise.catch(()=>{this.unlocked=false;cubeAudio.volume=.72});
+        }
+      }catch{this.unlocked=false;cubeAudio.volume=.72}
+    },
+    turn(strength=1){
+      if(!state.settings.sound) return;
+      const now=performance.now();if(now-this.lastAt<70)return;this.lastAt=now;
+      try{
+        cubeAudio.pause();cubeAudio.currentTime=0;cubeAudio.volume=Math.min(.82,.68*strength);
+        const p=cubeAudio.play();if(p&&typeof p.catch==="function")p.catch(()=>{});
+      }catch{}
+    },
+    snap(){},faceComplete(){},cubeComplete(){},shuffle(){},success(){}
+  };
+
+  function showToast(message){
+    toast.textContent = message;
+    toast.classList.remove("show");
+    void toast.offsetWidth;
+    toast.classList.add("show");
+  }
+
+  function showFaceHint(message){
+    faceHint.textContent = message;
+    faceHint.classList.remove("show");
+    void faceHint.offsetWidth;
+    faceHint.classList.add("show");
+  }
+
+  function resizeEffectCanvas(){
+    const r=canvas.getBoundingClientRect();
+    const dpr=Math.min(window.devicePixelRatio||1,2);
+    effectCanvas.width=Math.max(1,Math.round(r.width*dpr));
+    effectCanvas.height=Math.max(1,Math.round(r.height*dpr));
+    effectCanvas.style.width=`${r.width}px`;
+    effectCanvas.style.height=`${r.height}px`;
+    effectCtx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  function addSpark(x,y,color,scale=1,confetti=false){
+    const angle=Math.random()*Math.PI*2;
+    const speed=(confetti?1.8+Math.random()*4.2:2.5+Math.random()*5.5)*scale;
+    state.particles.push({
+      x,y,px:x,py:y,vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-(confetti?1.6:0),
+      gravity:confetti?.09:.075,life:1,decay:(confetti?.008:.014)+Math.random()*.008,
+      size:(confetti?3.2+Math.random()*4.8:1.5+Math.random()*2.8)*scale,
+      color,confetti,spin:Math.random()*Math.PI,spinSpeed:(Math.random()-.5)*.26
+    });
+  }
+
+  function burstAt(x,y,{count=52,colors=["#ffffff","#7deaff","#ffd84a"],scale=1,confetti=false}={}){
+    for(let i=0;i<count;i++) addSpark(x,y,colors[i%colors.length],scale,confetti);
+  }
+
+  function updateEffects(){
+    const w=effectCanvas.clientWidth,h=effectCanvas.clientHeight;
+    effectCtx.clearRect(0,0,w,h);
+    for(let i=state.particles.length-1;i>=0;i--){
+      const p=state.particles[i];
+      p.px=p.x;p.py=p.y;p.x+=p.vx;p.y+=p.vy;p.vy+=p.gravity;p.vx*=.992;p.life-=p.decay;p.spin+=p.spinSpeed;
+      if(p.life<=0 || p.y>h+40){state.particles.splice(i,1);continue}
+      effectCtx.globalAlpha=Math.max(0,p.life);
+      effectCtx.fillStyle=p.color;effectCtx.strokeStyle=p.color;
+      if(p.confetti){
+        effectCtx.save();effectCtx.translate(p.x,p.y);effectCtx.rotate(p.spin);
+        effectCtx.fillRect(-p.size*.65,-p.size*.22,p.size*1.3,p.size*.44);effectCtx.restore();
+      }else{
+        effectCtx.lineWidth=Math.max(1,p.size*.48);effectCtx.beginPath();effectCtx.moveTo(p.px,p.py);effectCtx.lineTo(p.x,p.y);effectCtx.stroke();
+      }
+    }
+    effectCtx.globalAlpha=1;
+  }
+
+  function faceScreenPosition(faceKey){
+    const local=normalByKey[faceKey].clone().multiplyScalar(1.72);
+    cubeRoot.updateMatrixWorld(true);
+    local.applyMatrix4(cubeRoot.matrixWorld).project(camera);
+    const r=effectCanvas.getBoundingClientRect();
+    return {x:(local.x*.5+.5)*r.width,y:(-.5*local.y+.5)*r.height};
+  }
+
+  function celebrateFace(faceKey){
+    const info=FACE_INFO[faceKey];if(!info)return;
+    const p=faceScreenPosition(faceKey);
+    burstAt(p.x,p.y,{count:64,colors:[info.color,"#ffffff","#ffd76a"],scale:.85});
+    setTimeout(()=>burstAt(p.x+(Math.random()-.5)*45,p.y-18,{count:26,colors:[info.color,"#ffffff"],scale:.55}),120);
+    tactileAudio.faceComplete();vibrate([8,22,10]);showToast(`${info.ko} 완성!`);
+  }
+
+  function celebrateCube(){
+    const r=effectCanvas.getBoundingClientRect();
+    const palette=["#ffffff","#58e0ff","#ffd84a","#ff6b75","#4be39a","#9b7cff"];
+    [[.22,.32],[.50,.22],[.78,.34],[.34,.48],[.67,.50]].forEach(([rx,ry],i)=>{
+      setTimeout(()=>burstAt(r.width*rx,r.height*ry,{count:82,colors:palette,scale:1.05}),i*150);
+    });
+    for(let i=0;i<190;i++){
+      const x=Math.random()*r.width,y=-20-Math.random()*r.height*.22;
+      addSpark(x,y,palette[i%palette.length],.72,true);
+    }
+    tactileAudio.cubeComplete();vibrate([18,30,25,35,42]);
+  }
+
+  // ---------- Three.js scene ----------
+  // 외부 addon 없이 Three.js 기본 BoxGeometry를 둥근 상자 형태로 변형합니다.
+  // CDN 요청을 Three.js 본체 하나로 줄여 GitHub Pages 실행 안정성을 높입니다.
+  function createRoundedBoxGeometry(width,height,depth,segments=4,radius=.075){
+    const geometry=new THREE.BoxGeometry(width,height,depth,segments,segments,segments);
+    const position=geometry.attributes.position;
+    const normal=geometry.attributes.normal;
+    const half=new THREE.Vector3(width/2,height/2,depth/2);
+    const inner=new THREE.Vector3(
+      Math.max(0,half.x-radius),
+      Math.max(0,half.y-radius),
+      Math.max(0,half.z-radius)
+    );
+    const point=new THREE.Vector3();
+    const anchor=new THREE.Vector3();
+    const delta=new THREE.Vector3();
+    for(let i=0;i<position.count;i++){
+      point.fromBufferAttribute(position,i);
+      anchor.set(
+        THREE.MathUtils.clamp(point.x,-inner.x,inner.x),
+        THREE.MathUtils.clamp(point.y,-inner.y,inner.y),
+        THREE.MathUtils.clamp(point.z,-inner.z,inner.z)
+      );
+      delta.copy(point).sub(anchor);
+      if(delta.lengthSq()>1e-10){
+        delta.normalize();
+        point.copy(anchor).addScaledVector(delta,radius);
+        position.setXYZ(i,point.x,point.y,point.z);
+        normal.setXYZ(i,delta.x,delta.y,delta.z);
+      }
+    }
+    position.needsUpdate=true;
+    normal.needsUpdate=true;
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    return geometry;
+  }
+
+  let renderer;
+  function makeRenderer(options){
+    return new THREE.WebGLRenderer(Object.assign({canvas,alpha:true},options));
+  }
+  try{
+    renderer = makeRenderer({
+      antialias:!IS_MOBILE_DEVICE,
+      powerPreference:IS_MOBILE_DEVICE?"default":"high-performance",
+      precision:IS_MOBILE_DEVICE?"mediump":"highp"
+    });
+  }catch(firstError){
+    try{
+      renderer = makeRenderer({antialias:false,powerPreference:"default",precision:"mediump"});
+    }catch(error){
+      window.__hmCubeShowFatal?.("이 모바일 브라우저에서 3D 화면을 시작하지 못했습니다. 브라우저를 새로고침하거나 Chrome·Safari 최신 버전에서 실행해 주세요.");
+      throw error;
+    }
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,IS_MOBILE_DEVICE?1.25:2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.NeutralToneMapping || THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.03;
+  renderer.shadowMap.enabled = !IS_MOBILE_DEVICE;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x071018,11.5,24);
+
+  const camera = new THREE.PerspectiveCamera(34,1,.1,50);
+  const cameraTarget = new THREE.Vector3(0,0,0);
+  let orbitYaw = .70;
+  let orbitPitch = .52;
+  let orbitRadius = IS_MOBILE_DEVICE?9.4:8.35;
+  let orbitUserAdjusted=false;
+  function responsiveOrbitRadius(){
+    const fullW=Math.max(1,root.clientWidth||window.innerWidth||1);
+    const fullH=Math.max(1,root.clientHeight||window.innerHeight||1);
+    const a=fullW/fullH;
+    if(a<.48)return 10.65;
+    if(a<.60)return 10.15;
+    if(a<.74)return 9.65;
+    if(a<.90)return 9.15;
+    if(a<1.10)return 8.72;
+    return 8.35;
+  }
+
+  // 색을 오염시키지 않는 중성 스튜디오 조명.
+  const hemi = new THREE.HemisphereLight(0xf3f8ff,0x11151a,1.82);
+  scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffffff,2.72);
+  key.position.set(5.8,7.8,6.4);key.castShadow=!IS_MOBILE_DEVICE;
+  key.shadow.mapSize.set(IS_MOBILE_DEVICE?512:1024,IS_MOBILE_DEVICE?512:1024);
+  key.shadow.camera.left=-6;key.shadow.camera.right=6;key.shadow.camera.top=6;key.shadow.camera.bottom=-6;
+  key.shadow.bias=-.00018;key.shadow.normalBias=.025;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(0xb9d3ff,.92);fill.position.set(-5.5,2.5,5.2);scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff,.88);rim.position.set(-5.5,5.2,-5.8);scene.add(rim);
+  const frontSoft = new THREE.PointLight(0xffffff,.34,15);frontSoft.position.set(2.6,-.4,5.5);scene.add(frontSoft);
+
+  const floor = new THREE.Mesh(
+    new THREE.CircleGeometry(5.2,IS_MOBILE_DEVICE?36:72),
+    new THREE.MeshStandardMaterial({color:0x0a141d,roughness:.90,metalness:.02,transparent:true,opacity:.82})
+  );
+  floor.rotation.x=-Math.PI/2;floor.position.y=-2.20;floor.receiveShadow=!IS_MOBILE_DEVICE;scene.add(floor);
+
+  const shadowDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(2.42,IS_MOBILE_DEVICE?32:64),
+    new THREE.MeshBasicMaterial({color:0x000000,transparent:true,opacity:.27,depthWrite:false})
+  );
+  shadowDisc.rotation.x=-Math.PI/2;shadowDisc.position.y=-2.17;scene.add(shadowDisc);
+
+  const cubeRoot = new THREE.Group();
+  cubeRoot.position.y=0;
+  cubeRoot.scale.setScalar(.81);
+  scene.add(cubeRoot);
+
+  // 깨끗한 기본 큐브: 잡티 없는 검정 ABS 본체와 매끈한 6색 타일.
+  const CUBIE_GAP=1.035;
+  const bodyGeometry = createRoundedBoxGeometry(.992,.992,.992,IS_MOBILE_DEVICE?5:9,.102);
+  const bodyMaterial = new THREE.MeshPhysicalMaterial({
+    color:0x0b0d0f,roughness:.27,metalness:0,
+    clearcoat:.20,clearcoatRoughness:.34,specularIntensity:.48
+  });
+
+  function createRoundedRectGeometry(width,height,radius,segments=16){
+    const hw=width/2,hh=height/2,r=Math.min(radius,hw,hh);
+    const shape=new THREE.Shape();
+    shape.moveTo(-hw+r,-hh);
+    shape.lineTo(hw-r,-hh);shape.quadraticCurveTo(hw,-hh,hw,-hh+r);
+    shape.lineTo(hw,hh-r);shape.quadraticCurveTo(hw,hh,hw-r,hh);
+    shape.lineTo(-hw+r,hh);shape.quadraticCurveTo(-hw,hh,-hw,hh-r);
+    shape.lineTo(-hw,-hh+r);shape.quadraticCurveTo(-hw,-hh,-hw+r,-hh);
+    return new THREE.ShapeGeometry(shape,segments);
+  }
+
+  const plateGeometry = createRoundedRectGeometry(.842,.842,.075,IS_MOBILE_DEVICE?10:18);
+  const plateMaterial = new THREE.MeshPhysicalMaterial({
+    color:0x020304,roughness:.31,metalness:0,clearcoat:.12,clearcoatRoughness:.42,
+    side:THREE.FrontSide
+  });
+
+  const stickerGeometry = createRoundedRectGeometry(.772,.772,.064,IS_MOBILE_DEVICE?10:20);
+  const normalByKey = {
+    px:new THREE.Vector3(1,0,0), nx:new THREE.Vector3(-1,0,0),
+    py:new THREE.Vector3(0,1,0), ny:new THREE.Vector3(0,-1,0),
+    pz:new THREE.Vector3(0,0,1), nz:new THREE.Vector3(0,0,-1)
+  };
+
+  function stickerMaterial(color){
+    return new THREE.MeshPhysicalMaterial({
+      color,roughness:.30,metalness:0,
+      clearcoat:.24,clearcoatRoughness:.22,specularIntensity:.54,
+      side:THREE.FrontSide
+    });
+  }
+
+  const stickerMaterials = {};
+  Object.entries(FACE_COLOR).forEach(([k,c])=>stickerMaterials[k]=stickerMaterial(c));
+
+  function orientFaceMesh(mesh,keyName){
+    mesh.rotation.set(0,0,0);
+    if(keyName==="px") mesh.rotation.y=Math.PI/2;
+    else if(keyName==="nx") mesh.rotation.y=-Math.PI/2;
+    else if(keyName==="py") mesh.rotation.x=-Math.PI/2;
+    else if(keyName==="ny") mesh.rotation.x=Math.PI/2;
+    else if(keyName==="nz") mesh.rotation.y=Math.PI;
+  }
 
 
+  function addSticker(cubie,keyName){
+    const n=normalByKey[keyName];
+    const plate=new THREE.Mesh(plateGeometry,plateMaterial);
+    plate.userData.isStickerBase=true;plate.userData.faceColorKey=keyName;
+    plate.position.copy(n).multiplyScalar(.4985);orientFaceMesh(plate,keyName);
+    plate.renderOrder=2;plate.raycast=()=>{};cubie.add(plate);
+
+    const sticker = new THREE.Mesh(stickerGeometry,stickerMaterials[keyName]);
+    sticker.userData.isSticker=true;sticker.userData.faceColorKey=keyName;
+    sticker.position.copy(n).multiplyScalar(.5022);orientFaceMesh(sticker,keyName);
+    sticker.castShadow=false;sticker.receiveShadow=false;
+    sticker.renderOrder=3;cubie.add(sticker);
+  }
+
+  function buildCube(){
+    while(cubeRoot.children.length) cubeRoot.remove(cubeRoot.children[0]);
+    state.cubies.length=0;
+    for(let x=-1;x<=1;x++){
+      for(let y=-1;y<=1;y++){
+        for(let z=-1;z<=1;z++){
+          const cubie=new THREE.Mesh(bodyGeometry,bodyMaterial);
+          cubie.position.set(x*CUBIE_GAP,y*CUBIE_GAP,z*CUBIE_GAP);
+          cubie.castShadow=!IS_MOBILE_DEVICE;cubie.receiveShadow=false;
+          cubie.userData.isCubie=true;
+          cubie.userData.coord=new THREE.Vector3(x,y,z);
+          if(x===1)addSticker(cubie,"px");
+          if(x===-1)addSticker(cubie,"nx");
+          if(y===1)addSticker(cubie,"py");
+          if(y===-1)addSticker(cubie,"ny");
+          if(z===1)addSticker(cubie,"pz");
+          if(z===-1)addSticker(cubie,"nz");
+          cubeRoot.add(cubie);
+          state.cubies.push(cubie);
+        }
+      }
+    }
+    cubeRoot.updateMatrixWorld(true);
+  }
+
+  function updateCamera(){
+    const cp=Math.cos(orbitPitch);
+    const radius=orbitRadius;
+    camera.position.set(
+      radius*Math.sin(orbitYaw)*cp,
+      radius*Math.sin(orbitPitch),
+      radius*Math.cos(orbitYaw)*cp
+    );
+    cameraTarget.set(0,0,0);
+    camera.lookAt(cameraTarget);
+  }
+
+  function bestFaceForDirection(direction){
+    const q=new THREE.Quaternion();cubeRoot.getWorldQuaternion(q);
+    let best="pz",score=-Infinity;
+    for(const [key,n] of Object.entries(normalByKey)){
+      const d=n.clone().applyQuaternion(q).dot(direction);
+      if(d>score){score=d;best=key}
+    }
+    return best;
+  }
+
+  function updateOrientationHud(){
+    const now=performance.now();if(now-state.lastOrientationAt<90)return;state.lastOrientationAt=now;
+    camera.updateMatrixWorld(true);cubeRoot.updateMatrixWorld(true);
+    const cameraQ=camera.getWorldQuaternion(new THREE.Quaternion());
+    const screenRight=new THREE.Vector3(1,0,0).applyQuaternion(cameraQ).normalize();
+    const screenUp=new THREE.Vector3(0,1,0).applyQuaternion(cameraQ).normalize();
+    const cubeWorld=cubeRoot.getWorldPosition(new THREE.Vector3());
+    const towardCamera=camera.getWorldPosition(new THREE.Vector3()).sub(cubeWorld).normalize();
+    const dirs={up:screenUp,down:screenUp.clone().negate(),right:screenRight,left:screenRight.clone().negate(),front:towardCamera,back:towardCamera.clone().negate()};
+    const screenKo={up:"위",down:"아래",left:"왼쪽",right:"오른쪽",front:"정면",back:"뒤"};
+    const resolved=Object.entries(dirs).map(([slot,dir])=>[slot,bestFaceForDirection(dir)]);
+    const signature=resolved.map(([slot,key])=>`${slot}:${key}`).join("|");
+    if(signature===state.lastOrientationText)return;
+    for(const [slot,key] of resolved){
+      const info=FACE_INFO[key],el=orientationEls[slot];if(!el)continue;
+      const dot=el.querySelector("i"),bold=el.querySelector("b");
+      if(dot)dot.style.setProperty("--face-color",info.color);
+      if(bold)bold.textContent=screenKo[slot];
+      const tail=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE);
+      if(tail)tail.nodeValue=` · ${info.ko} ${info.move}`;
+    }
+    state.lastOrientationText=signature;
+  }
+
+  function syncMobileViewport(){
+    if(!IS_MOBILE_DEVICE)return;
+    const h=Math.max(320,Math.round(window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight));
+    document.documentElement.style.setProperty("--hm-app-height",`${h}px`);
+  }
+
+  function resize(){
+    syncMobileViewport();
+    const r=root.getBoundingClientRect();
+    const css=getComputedStyle(root);
+    const dockSpace=parseFloat(css.getPropertyValue("--hm-dock-space"))||0;
+    const panelSpace=parseFloat(css.getPropertyValue("--hm-panel-space"))||0;
+    const w=Math.max(1,r.width),h=Math.max(220,r.height-dockSpace-panelSpace);
+    if(!orbitUserAdjusted)orbitRadius=responsiveOrbitRadius();
+    renderer.setSize(w,h,false);
+    camera.aspect=w/h;camera.updateProjectionMatrix();
+    updateCamera();
+    resizeEffectCanvas();
+  }
+
+  function nearestQuarter(v){
+    return Math.round(v/(Math.PI/2))*(Math.PI/2);
+  }
+
+  function snapQuaternion(obj){
+    const e=new THREE.Euler().setFromQuaternion(obj.quaternion,"XYZ");
+    e.x=nearestQuarter(e.x);e.y=nearestQuarter(e.y);e.z=nearestQuarter(e.z);
+    obj.quaternion.setFromEuler(e).normalize();
+  }
+
+  function coordValue(cubie,axis){
+    return Math.round(cubie.position[axis]/CUBIE_GAP);
+  }
+
+  function inverseMove(move){
+    return move.endsWith("'") ? move.slice(0,-1) : move+"'";
+  }
+
+  function baseMove(move){
+    return move.charAt(0);
+  }
+
+  const MOVE_KO={U:"윗면",D:"아랫면",L:"왼쪽 면",R:"오른쪽 면",F:"앞면",B:"뒷면",M:"가운데 세로층",E:"가운데 가로층",S:"가운데 앞뒤층"};
+  function moveKorean(move){
+    const notation=move.replace("'","′");
+    return `${MOVE_KO[baseMove(move)]} ${move.endsWith("'")?"반시계 방향":"시계 방향"} · ${notation}`;
+  }
+
+  function normalizedSpec(move){
+    const base=baseMove(move);
+    const spec=MOVE[base];
+    return {
+      base,
+      axis:spec.axis,
+      layer:spec.layer,
+      angle:move.endsWith("'") ? -spec.angle : spec.angle
+    };
+  }
+
+  function simplifyHistory(move){
+    const last=state.history[state.history.length-1];
+    if(last && inverseMove(last)===move) state.history.pop();
+    else state.history.push(move);
+  }
+
+  function humanProgress(t){
+    if(t<.13){
+      const u=t/.13;
+      return .06*(u*u*(3-2*u));
+    }
+    if(t<.84){
+      const u=(t-.13)/.71;
+      const eased=1-Math.pow(1-u,3);
+      return .06+(1.035-.06)*eased;
+    }
+    const u=(t-.84)/.16;
+    const settle=u*u*(3-2*u);
+    return 1.035+(1-1.035)*settle;
+  }
+
+  async function turn(move,options={}){
+    if(state.turning) return false;
+    const {silent=false,instant=false,track=true,count=true,check=true,effects=true,duration=null,save=true} = options;
+    const spec=normalizedSpec(move);
+    state.turning=true;
+    setControlsDisabled(true);
+
+    const selected=state.cubies.filter(c=>coordValue(c,spec.axis)===spec.layer);
+    const pivot=new THREE.Group();
+    cubeRoot.add(pivot);
+    selected.forEach(c=>pivot.attach(c));
+
+    if(!silent && !instant) tactileAudio.turn(.9+Math.random()*.16);
+
+    if(instant){
+      pivot.rotation[spec.axis]=spec.angle;
+      pivot.updateMatrixWorld(true);
+    }else{
+      const turnDuration=duration ?? (285+Math.random()*70);
+      const start=performance.now();
+      await new Promise(resolve=>{
+        function step(now){
+          const t=Math.min(1,(now-start)/turnDuration);
+          pivot.rotation[spec.axis]=spec.angle*humanProgress(t);
+          if(t<1) requestAnimationFrame(step);
+          else resolve();
+        }
+        requestAnimationFrame(step);
+      });
+    }
+
+    pivot.rotation[spec.axis]=spec.angle;
+    pivot.updateMatrixWorld(true);
+    selected.forEach(c=>{
+      cubeRoot.attach(c);
+      c.position.x=Math.round(c.position.x/CUBIE_GAP)*CUBIE_GAP;
+      c.position.y=Math.round(c.position.y/CUBIE_GAP)*CUBIE_GAP;
+      c.position.z=Math.round(c.position.z/CUBIE_GAP)*CUBIE_GAP;
+      snapQuaternion(c);
+    });
+    cubeRoot.remove(pivot);
+
+    if(track) simplifyHistory(move);
+    if(count) state.moves++;
+    if(!silent && !instant){
+      tactileAudio.snap(.95+Math.random()*.1);
+      vibrate(7);
+    }
+
+    state.turning=false;
+    setControlsDisabled(false);
+    updateHUD();
+    if(state.active && save) saveGame();
+
+    const full=evaluateFaceCompletion(effects && !instant);
+    if(full){
+      if(check && state.active) completeGame();
+      else if(effects && state.demoRunning){celebrateCube();showToast("여섯 면이 모두 완성되었습니다")}
+    }
+    return true;
+  }
+
+  function setControlsDisabled(disabled){
+    $$(".move-btn,.primary-dock button,.tool-sheet button,.hint-sheet button,.compact-coach button").forEach(b=>b.disabled=disabled);
+  }
+
+  function worldStickerNormal(sticker,cubie){
+    const local=normalByKey[sticker.userData.faceColorKey].clone();
+    return local.applyQuaternion(cubie.quaternion).normalize();
+  }
+
+  function dominantFaceKey(n){
+    const ax=Math.abs(n.x),ay=Math.abs(n.y),az=Math.abs(n.z);
+    if(ax>=ay && ax>=az) return n.x>=0?"px":"nx";
+    if(ay>=ax && ay>=az) return n.y>=0?"py":"ny";
+    return n.z>=0?"pz":"nz";
+  }
+
+  function getSolvedFaces(){
+    const groups={px:[],nx:[],py:[],ny:[],pz:[],nz:[]};
+    for(const cubie of state.cubies){
+      for(const child of cubie.children){
+        if(!child.userData.isSticker || child.userData.isCenterLabel) continue;
+        const worldFace=dominantFaceKey(worldStickerNormal(child,cubie));
+        groups[worldFace].push(child.userData.faceColorKey);
+      }
+    }
+    const solved=new Set();
+    Object.entries(groups).forEach(([face,colors])=>{
+      if(colors.length===9 && colors.every(c=>c===colors[0])) solved.add(face);
+    });
+    return solved;
+  }
+
+  function isSolved(){
+    return getSolvedFaces().size===6;
+  }
+
+  function evaluateFaceCompletion(allowEffects=true){
+    const current=getSolvedFaces();
+    const full=current.size===6;
+    if(allowEffects && !full){
+      for(const face of current){
+        if(!state.solvedFaces.has(face)) celebrateFace(face);
+      }
+    }
+    state.solvedFaces=current;
+    return full;
+  }
+
+  function randomScramble(n){
+    const faces=["U","D","L","R","F","B"];
+    const seq=[];
+    let prev="";
+    for(let i=0;i<n;i++){
+      let f;
+      do{f=faces[Math.floor(Math.random()*faces.length)]}while(f===prev);
+      prev=f;
+      seq.push(f+(Math.random()<.5?"":"'"));
+    }
+    return seq;
+  }
+
+  async function resetToSolved(){
+    state.turning=false;
+    buildCube();
+    state.solvedFaces=getSolvedFaces();
+    state.history=[];
+    state.moves=0;
+    state.hints=0;
+    resetTimer(0);
+    updateHUD();
+    await sleep(30);
+  }
 
 
+  let firstPlayGuideShown=false;
+  function showFirstPlayGuide(){if(firstPlayGuide)firstPlayGuide.hidden=true}
+  function hideFirstPlayGuide(){
+    if(firstPlayGuide)firstPlayGuide.hidden=true;syncDrawerViewport();
+  }
+
+  async function startNewGame(scrambleCount){
+    stopAutoDemo(false);
+    tactileAudio.unlock();
+    menuOverlay.classList.add("hidden");
+    resultOverlay.classList.add("hidden");
+    if(shareBtn)shareBtn.hidden=false;
+    state.active=true;
+    state.modeScramble=scrambleCount;
+    await resetToSolved();
+
+    const seq=randomScramble(scrambleCount);
+    tactileAudio.shuffle();
+    showToast(`${scrambleCount}회 섞는 중`);
+    setControlsDisabled(true);
+    for(let i=0;i<seq.length;i++){
+      await turn(seq[i],{silent:false,instant:false,track:true,count:false,check:false,effects:false});
+      if(i<seq.length-1) await sleep(14);
+    }
+    state.moves=0;
+    resetTimer(0);
+    startTimer();
+    setControlsDisabled(false);
+    updateHUD();
+    saveGame();
+    showToast("시작! 색 면을 잡고 밀어보세요");
+    showFirstPlayGuide();
+  }
+
+  async function continueGame(){
+    stopAutoDemo(false);
+    const saved=safeParse(storageGet(KEY.save),null);
+    if(!saved || !Array.isArray(saved.history)) return;
+    tactileAudio.unlock();
+    menuOverlay.classList.add("hidden");
+    resultOverlay.classList.add("hidden");
+    if(shareBtn)shareBtn.hidden=false;
+    state.active=true;
+    await resetToSolved();
+    state.modeScramble=saved.modeScramble || 12;
+    for(const m of saved.history){
+      await turn(m,{silent:true,instant:true,track:true,count:false,check:false,effects:false});
+    }
+    state.moves=saved.moves || 0;
+    state.hints=saved.hints || 0;
+    resetTimer(saved.elapsed || 0);
+    startTimer();
+    updateHUD();
+    showToast("저장된 게임을 이어갑니다");
+    showFirstPlayGuide();
+  }
+
+  async function reshuffle(){
+    if(!state.active) return;
+    pauseTimer();
+    await startNewGame(state.modeScramble);
+  }
+
+  async function undo(){
+    if(!state.active || state.turning || !state.history.length) return;
+    const last=state.history[state.history.length-1];
+    await turn(inverseMove(last),{track:true,count:true,check:true});
+  }
+
+  let currentHintMove=null;
+  function updateHintDrawer(move){
+    const display=move.replace(/'/g,"′");
+    $("#hint-move-code").textContent=display;
+    $("#hint-move-copy").textContent=moveKorean(move);
+  }
+  async function previewHintMove(countHint=false){
+    if(!currentHintMove||state.turning)return;
+    if(countHint)state.hints++;
+    const next=currentHintMove,label=moveKorean(next);
+    const matching=$$(".move-btn").find(btn=>btn.dataset.move===next);
+    matching?.classList.add("hint-active");pauseTimer();
+    showFaceHint(`힌트 · ${label}`);
+    await turn(next,{track:false,count:false,check:false,effects:false,duration:520,save:false});
+    await sleep(600);
+    await turn(inverseMove(next),{track:false,count:false,check:false,effects:false,duration:410,save:false,silent:true});
+    matching?.classList.remove("hint-active");showFaceHint(`이제 직접 해보세요 · ${label}`);
+    if(state.active)startTimer();saveGame();
+  }
+  async function hint(){
+    if(!state.active || state.turning)return;
+    if(!state.history.length){showFaceHint("이미 완성 상태입니다");return}
+    currentHintMove=inverseMove(state.history[state.history.length-1]);
+    updateHintDrawer(currentHintMove);openHintDrawer();
+    await previewHintMove(true);
+  }
+
+  const demoHud=$("#auto-demo-hud");
+  const demoPhase=$("#demo-phase");
+  const demoMove=$("#demo-move");
+  const demoStep=$("#demo-step");
+  const demoFill=$("#demo-progress-fill");
+  const demoPause=$("#demo-pause");
+
+  function updateDemoHud(phase,move,index,total){
+    demoPhase.textContent=phase;
+    demoMove.textContent=move ? moveKorean(move) : "큐브를 준비하고 있습니다";
+    demoStep.textContent=`${index} / ${total}`;
+    demoFill.style.width=`${total?Math.round(index/total*100):0}%`;
+    demoPause.textContent=state.demoPaused?"계속 보기":"일시정지";
+  }
+
+  async function waitDemo(ms,token){
+    let remain=ms;
+    while(remain>0 && state.demoRunning && token===state.demoToken){
+      if(state.demoPaused){await sleep(60);continue}
+      const slice=Math.min(40,remain);await sleep(slice);remain-=slice*state.demoSpeed;
+    }
+    return state.demoRunning && token===state.demoToken;
+  }
+
+  function stopAutoDemo(openMenu=true){
+    state.demoToken++;
+    state.demoRunning=false;state.demoPaused=false;state.demoAbort=true;
+    demoHud.hidden=true;root.classList.remove("is-demo");
+    if(openMenu){menuOverlay.classList.remove("hidden");updateRecordUI();refreshContinueUI()}
+  }
+
+  async function runAutoDemo(){
+    if(state.turning || state.demoRunning) return;
+    pauseTimer();saveGame();
+    state.active=false;state.demoRunning=true;state.demoPaused=false;state.demoAbort=false;state.demoSpeed=1;
+    const token=++state.demoToken;
+    closeBottomPanels();menuOverlay.classList.add("hidden");resultOverlay.classList.add("hidden");$("#guide-overlay").classList.add("hidden");
+    demoHud.hidden=false;root.classList.add("is-demo");
+    tactileAudio.unlock();
+    await resetToSolved();
+    const seq=randomScramble(14);
+    tactileAudio.shuffle();
+    updateDemoHud("1단계 · 무작위로 섞기",null,0,seq.length);
+    for(let i=0;i<seq.length;i++){
+      if(!state.demoRunning || token!==state.demoToken) return;
+      while(state.demoPaused && state.demoRunning) await sleep(60);
+      updateDemoHud("1단계 · 무작위로 섞기",seq[i],i+1,seq.length);
+      await turn(seq[i],{silent:false,track:true,count:false,check:false,effects:false,duration:360/state.demoSpeed});
+      if(!await waitDemo(110,token)) return;
+    }
+    updateDemoHud("잠시 큐브 상태 확인",null,seq.length,seq.length);
+    if(!await waitDemo(950,token)) return;
+    const solution=[...seq].reverse().map(inverseMove);
+    updateDemoHud("2단계 · 천천히 자동 맞추기",null,0,solution.length);
+    for(let i=0;i<solution.length;i++){
+      if(!state.demoRunning || token!==state.demoToken) return;
+      while(state.demoPaused && state.demoRunning) await sleep(60);
+      updateDemoHud("2단계 · 천천히 자동 맞추기",solution[i],i+1,solution.length);
+      await turn(solution[i],{silent:false,track:true,count:false,check:false,effects:true,duration:680/state.demoSpeed});
+      if(!await waitDemo(260,token)) return;
+    }
+    state.demoRunning=false;root.classList.remove("is-demo");
+    updateDemoHud("완성",null,solution.length,solution.length);
+    demoMove.textContent="모든 면이 완성되었습니다";
+    showToast("자동 맞추기 시연 완료");
+    await sleep(1400);demoHud.hidden=true;menuOverlay.classList.remove("hidden");refreshContinueUI();
+  }
+
+  function completeGame(){
+    pauseTimer();
+    state.active=false;
+    hideFirstPlayGuide();
+    closeBottomPanels();
+    const elapsed=getElapsed();
+    const moves=state.moves;
+    state.records.clears=(state.records.clears||0)+1;
+    if(!state.records.bestTime || elapsed<state.records.bestTime) state.records.bestTime=elapsed;
+    if(!state.records.bestMoves || moves<state.records.bestMoves) state.records.bestMoves=moves;
+    saveRecords();clearSave();updateRecordUI();
+    $("#result-time").textContent=formatTime(elapsed);
+    $("#result-moves").textContent=String(moves);
+    $("#result-hints").textContent=String(state.hints);
+    celebrateCube();
+    setTimeout(()=>resultOverlay.classList.remove("hidden"),1100);
+  }
+
+  async function goHome(){
+    stopAutoDemo(false);
+    pauseTimer();
+    hideFirstPlayGuide();
+    closeBottomPanels();
+    state.active=false;
+    if(shareBtn)shareBtn.hidden=true;
+    resultOverlay.classList.add("hidden");
+    menuOverlay.classList.remove("hidden");
+    updateRecordUI();
+    refreshContinueUI();
+  }
+
+  // ---------- Pointer interaction ----------
+  const raycaster=new THREE.Raycaster();
+  const pointer=new THREE.Vector2();
+  const worldUp=new THREE.Vector3(0,1,0);
+  const cameraRight=new THREE.Vector3();
+  const cameraUpVec=new THREE.Vector3();
+  const qYaw=new THREE.Quaternion();
+  const qPitch=new THREE.Quaternion();
+  const inverseRootQ=new THREE.Quaternion();
+  const drag={
+    down:false,pointerId:null,startX:0,startY:0,lastX:0,lastY:0,startTime:0,
+    button:0,forceOrbit:false,mode:"none",hit:null,startQuat:new THREE.Quaternion(),slice:null
+  };
+
+  function screenToNdc(x,y){
+    const r=canvas.getBoundingClientRect();
+    pointer.x=((x-r.left)/r.width)*2-1;
+    pointer.y=-((y-r.top)/r.height)*2+1;
+  }
+
+  function findCubie(obj){
+    let o=obj;
+    while(o && o!==cubeRoot){
+      if(o.userData && o.userData.isCubie) return o;
+      o=o.parent;
+    }
+    return null;
+  }
+
+  function hitCube(x,y){
+    screenToNdc(x,y);raycaster.setFromCamera(pointer,camera);
+    const hits=raycaster.intersectObjects(state.cubies,true);if(!hits.length)return null;
+    const hit=hits[0],cubie=findCubie(hit.object);if(!cubie)return null;
+    const normalWorld=new THREE.Vector3();
+    if(hit.face)normalWorld.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+    else normalWorld.copy(hit.point).sub(cubie.getWorldPosition(new THREE.Vector3())).normalize();
+    cubeRoot.getWorldQuaternion(inverseRootQ).invert();
+    const normalLocal=normalWorld.clone().applyQuaternion(inverseRootQ).normalize();
+    const pointLocal=cubeRoot.worldToLocal(hit.point.clone());
+    const faceKey=dominantFaceKey(normalLocal);
+    return {
+      cubie,faceKey,face:FACE_INFO[faceKey].move,normalLocal,pointLocal,
+      isSticker:!!hit.object.userData.isSticker,
+      object:hit.object
+    };
+  }
+
+  function rotateWholeCube(dx,dy){
+    qYaw.setFromAxisAngle(worldUp,dx*.0087);
+    cameraRight.set(1,0,0).applyQuaternion(camera.quaternion).normalize();
+    qPitch.setFromAxisAngle(cameraRight,dy*.0087);
+    cubeRoot.quaternion.premultiply(qYaw).premultiply(qPitch).normalize();
+  }
+
+  function screenBasis(){
+    const q=camera.getWorldQuaternion(new THREE.Quaternion());
+    return {
+      right:new THREE.Vector3(1,0,0).applyQuaternion(q).normalize(),
+      up:new THREE.Vector3(0,1,0).applyQuaternion(q).normalize()
+    };
+  }
+
+  function gestureSlice(hit,dx,dy){
+    const faceNormal=hit.normalLocal.clone();
+    const rootQ=cubeRoot.getWorldQuaternion(new THREE.Quaternion());
+    const basis=screenBasis();
+    const candidates=[];
+    for(const axis of ["x","y","z"]){
+      if(Math.abs(faceNormal[axis])>.75)continue;
+      const axisLocal=AXIS_VECTOR[axis];
+      const tangentLocal=new THREE.Vector3().crossVectors(axisLocal,faceNormal).normalize();
+      const tangentWorld=tangentLocal.clone().applyQuaternion(rootQ).normalize();
+      let sx=tangentWorld.dot(basis.right),sy=-tangentWorld.dot(basis.up);
+      const len=Math.hypot(sx,sy);if(len<.08)continue;
+      sx/=len;sy/=len;
+      const signed=dx*sx+dy*sy;
+      candidates.push({axis,layer:coordValue(hit.cubie,axis),screenX:sx,screenY:sy,score:Math.abs(signed)});
+    }
+    candidates.sort((a,b)=>b.score-a.score);
+    return candidates[0]||null;
+  }
+
+  function moveFromAxisLayerAngle(axis,layer,angle){
+    const entry=Object.entries(MOVE).find(([,spec])=>spec.axis===axis&&spec.layer===layer);
+    if(!entry)return null;
+    const [base,spec]=entry;
+    return Math.sign(angle)===Math.sign(spec.angle)?base:base+"'";
+  }
+
+  function createSlicePivot(axis,layer){
+    const selected=state.cubies.filter(c=>coordValue(c,axis)===layer);
+    const pivot=new THREE.Group();cubeRoot.add(pivot);selected.forEach(c=>pivot.attach(c));
+    state.turning=true;setControlsDisabled(true);tactileAudio.turn(.88+Math.random()*.14);
+    return {axis,layer,selected,pivot,angle:0};
+  }
+
+  function settleProgress(t){
+    const u=1-Math.pow(1-t,3);
+    return u<.88?u:1+(u-1)*.22;
+  }
+
+  async function animateSliceTo(slice,target,duration=190){
+    const startAngle=slice.pivot.rotation[slice.axis];
+    const start=performance.now();
+    await new Promise(resolve=>{
+      function frame(now){
+        const t=Math.min(1,(now-start)/duration);
+        const eased=target===0?(t*t*(3-2*t)):settleProgress(t);
+        slice.pivot.rotation[slice.axis]=startAngle+(target-startAngle)*eased;
+        if(t<1)requestAnimationFrame(frame);else resolve();
+      }
+      requestAnimationFrame(frame);
+    });
+    slice.pivot.rotation[slice.axis]=target;slice.pivot.updateMatrixWorld(true);
+  }
+
+  function reattachSlice(slice){
+    slice.selected.forEach(c=>{
+      cubeRoot.attach(c);
+      c.position.x=Math.round(c.position.x/CUBIE_GAP)*CUBIE_GAP;
+      c.position.y=Math.round(c.position.y/CUBIE_GAP)*CUBIE_GAP;
+      c.position.z=Math.round(c.position.z/CUBIE_GAP)*CUBIE_GAP;
+      snapQuaternion(c);
+    });
+    cubeRoot.remove(slice.pivot);
+  }
+
+  async function finishDirectSlice(slice,target){
+    await animateSliceTo(slice,target,target===0?145:205);
+    reattachSlice(slice);
+    if(target!==0){
+      const move=moveFromAxisLayerAngle(slice.axis,slice.layer,target);
+      if(move){
+        simplifyHistory(move);state.moves++;startTimer();
+        tactileAudio.snap(.98+Math.random()*.08);vibrate(8);
+        showFaceHint(moveKorean(move));updateHUD();saveGame();
+        const full=evaluateFaceCompletion(true);
+        if(full&&state.active)completeGame();
+      }
+    }
+    state.turning=false;setControlsDisabled(false);drag.slice=null;
+  }
+
+  async function cancelDirectSlice(){
+    if(!drag.slice)return;
+    const slice=drag.slice;drag.slice=null;
+    await animateSliceTo(slice,0,130);reattachSlice(slice);
+    state.turning=false;setControlsDisabled(false);
+  }
+
+  canvas.addEventListener("contextmenu",e=>e.preventDefault());
+  canvas.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    if(!state.active||state.turning||state.demoRunning||drag.down)return;
+    tactileAudio.unlock();
+    try{canvas.setPointerCapture?.(e.pointerId)}catch{}
+    drag.down=true;drag.pointerId=e.pointerId;drag.startX=drag.lastX=e.clientX;drag.startY=drag.lastY=e.clientY;
+    drag.startTime=performance.now();drag.button=e.button;drag.forceOrbit=e.button!==0||e.shiftKey;
+    drag.startQuat.copy(cubeRoot.quaternion);drag.hit=hitCube(e.clientX,e.clientY);drag.slice=null;
+    drag.mode=drag.forceOrbit||!drag.hit?.isSticker?"orbit":"pending-slice";
+    state.orbiting=drag.mode==="orbit";
+  },{passive:false});
+
+  canvas.addEventListener("pointermove",e=>{
+    if(drag.down)e.preventDefault();
+    if(!drag.down||drag.pointerId!==e.pointerId||!state.active||state.demoRunning)return;
+    const stepX=e.clientX-drag.lastX,stepY=e.clientY-drag.lastY;
+    const totalX=e.clientX-drag.startX,totalY=e.clientY-drag.startY;
+    const distance=Math.hypot(totalX,totalY);
+
+    if(drag.mode==="orbit"){
+      if(!state.turning)rotateWholeCube(stepX,stepY);
+    }else if(drag.mode==="pending-slice"&&distance>11){
+      const gesture=gestureSlice(drag.hit,totalX,totalY);
+      if(gesture){drag.slice=createSlicePivot(gesture.axis,gesture.layer);drag.slice.screenX=gesture.screenX;drag.slice.screenY=gesture.screenY;drag.mode="slice"}
+    }
+
+    if(drag.mode==="slice"&&drag.slice){
+      const signedPx=totalX*drag.slice.screenX+totalY*drag.slice.screenY;
+      const raw=signedPx*.0132;
+      const resisted=Math.sign(raw)*Math.min(1.43,Math.abs(raw)>1.20?1.20+(Math.abs(raw)-1.20)*.18:Math.abs(raw));
+      drag.slice.angle=resisted;drag.slice.pivot.rotation[drag.slice.axis]=resisted;
+    }
+    drag.lastX=e.clientX;drag.lastY=e.clientY;
+  },{passive:false});
+
+  canvas.addEventListener("pointerup",async e=>{
+    e.preventDefault();
+    if(!drag.down||drag.pointerId!==e.pointerId)return;
+    const totalX=e.clientX-drag.startX,totalY=e.clientY-drag.startY;
+    const elapsed=Math.max(1,performance.now()-drag.startTime);
+    const speed=Math.hypot(totalX,totalY)/elapsed;
+    const slice=drag.slice;
+    drag.down=false;drag.pointerId=null;state.orbiting=false;drag.mode="none";
+    if(slice){
+      const signedPx=totalX*slice.screenX+totalY*slice.screenY;
+      const current=slice.pivot.rotation[slice.axis];
+      const commit=Math.abs(current)>.34||speed>.42;
+      const sign=Math.sign(Math.abs(current)>.06?current:signedPx)||1;
+      await finishDirectSlice(slice,commit?sign*Math.PI/2:0);
+    }
+  },{passive:false});
+
+  canvas.addEventListener("pointercancel",async e=>{
+    e.preventDefault();
+    if(!drag.down||drag.pointerId!==e.pointerId)return;
+    drag.down=false;drag.pointerId=null;state.orbiting=false;drag.mode="none";
+    await cancelDirectSlice();
+  },{passive:false});
+
+  canvas.addEventListener("wheel",e=>{
+    if(!state.active||state.demoRunning)return;
+    e.preventDefault();orbitUserAdjusted=true;orbitRadius=Math.max(7.4,Math.min(11.2,orbitRadius+e.deltaY*.006));updateCamera();
+  },{passive:false});
+  canvas.addEventListener("dblclick",()=>{
+    cubeRoot.quaternion.identity();orbitUserAdjusted=false;orbitRadius=responsiveOrbitRadius();updateCamera();showToast("기본 시점으로 돌아왔습니다");
+  });
+
+  // ---------- Korean beginner manual navigation ----------
+  let guidePageIndex=0;
+  function coachOpenStep(index,smooth=true){
+    const pages=$$(".compact-coach [data-guide-page]");if(!pages.length)return;
+    guidePageIndex=Math.max(0,Math.min(pages.length-1,index));
+    pages.forEach((page,i)=>{page.hidden=i!==guidePageIndex;page.classList.toggle("is-active",i===guidePageIndex)});
+    const status=$("#guide-page-status"),prev=$("#guide-prev"),next=$("#guide-next");
+    if(status)status.textContent=`${guidePageIndex+1} / ${pages.length}`;
+    if(prev)prev.disabled=guidePageIndex===0;
+    if(next){next.disabled=guidePageIndex===pages.length-1;next.textContent=guidePageIndex===pages.length-1?"마지막 단계":"다음 →"}
+    const scroller=$(".coach-card-pages");if(scroller)scroller.scrollTo({top:0,behavior:smooth?"smooth":"auto"});
+  }
+  $("#guide-prev")?.addEventListener("click",()=>coachOpenStep(guidePageIndex-1));
+  $("#guide-next")?.addEventListener("click",()=>coachOpenStep(guidePageIndex+1));
+  coachOpenStep(0,false);
+  async function previewGuideFormula(sequence){
+    if(state.turning)return;
+    const moves=String(sequence||"").trim().split(/\s+/).filter(Boolean);if(!moves.length)return;
+    const wasRunning=state.timerRunning;pauseTimer();
+    showFaceHint("공식 동작을 천천히 보여드립니다");
+    for(const move of moves){await turn(move,{track:false,count:false,check:false,effects:false,duration:390,save:false});await sleep(80)}
+    await sleep(320);
+    for(const move of moves.slice().reverse().map(inverseMove)){await turn(move,{silent:true,track:false,count:false,check:false,effects:false,duration:235,save:false})}
+    showFaceHint("원래 상태로 돌아왔습니다");if(wasRunning&&state.active)startTimer();
+  }
+  $$("[data-guide-demo]").forEach(button=>button.addEventListener("click",()=>previewGuideFormula(button.dataset.guideDemo)));
+
+  canvas.addEventListener("pointerdown",()=>tactileAudio.unlock(),{passive:true});
+
+  // ---------- UI ----------
+  $$(".mode[data-scramble]").forEach(btn=>{
+    btn.addEventListener("click",()=>{tactileAudio.unlock();startNewGame(Number(btn.dataset.scramble))});
+  });
+  continueBtn.addEventListener("click",()=>{tactileAudio.unlock();continueGame()});
+  $$(".move-btn").forEach(btn=>btn.addEventListener("click",()=>{
+    tactileAudio.unlock();
+    if(state.active) startTimer();
+    turn(btn.dataset.move);
+  }));
+  $("#undo-btn").addEventListener("click",()=>{closeBottomPanels();if(state.active)startTimer();undo()});
+  $("#hint-btn").addEventListener("click",()=>hint());
+  $("#shuffle-btn").addEventListener("click",()=>{closeBottomPanels();reshuffle()});
+  toolsBtn.addEventListener("click",toggleToolSheet);
+  settingsBtn?.addEventListener("click",toggleSettingsSheet);
+  settingsSheetClose?.addEventListener("click",()=>closeBottomPanels());
+  resetRecordsBtn?.addEventListener("click",resetPersonalRecords);
+  $("#learn-btn").addEventListener("click",()=>{window.location.href="https://www.healing-mart.com/2026/07/CUBEGAME.HTML"});
+  $("#tool-sheet-close").addEventListener("click",()=>closeBottomPanels());
+  $("#tool-sheet-close-top").addEventListener("click",()=>closeBottomPanels());
+  hintSheetClose.addEventListener("click",closeHintDrawer);
+  hintSheetBottomClose.addEventListener("click",closeHintDrawer);
+  hintPreviewBtn.addEventListener("click",()=>previewHintMove(false));
+  toolSheetBackdrop.addEventListener("click",()=>closeBottomPanels());
+  window.addEventListener("keydown",event=>{if(event.key!=="Escape")return;if(!guideOverlay.classList.contains("hidden"))closeGuide();else if(sheetIsOpen(hintSheet)||sheetIsOpen(toolSheet)||sheetIsOpen(settingsSheet))closeBottomPanels();else if(shareSheet?.classList.contains("show"))closeShareSheet()});
+  $("#home-main-btn").addEventListener("click",goHome);
+  $("#first-play-close")?.addEventListener("click",hideFirstPlayGuide);
+  $("#first-play-sound")?.addEventListener("click",()=>{state.settings.sound=true;saveSettings();updateSettingsUI();tactileAudio.unlock();hideFirstPlayGuide()});
+  $("#sound-test-btn")?.addEventListener("click",()=>{state.settings.sound=true;saveSettings();updateSettingsUI();tactileAudio.unlock();window.setTimeout(()=>tactileAudio.turn(1),80)});
+  $("#auto-demo-menu")?.addEventListener("click",runAutoDemo);
+  $("#guide-menu").addEventListener("click",()=>openGuide(false));
+  $("#guide-start-quick")?.addEventListener("click",()=>{closeGuide();tactileAudio.unlock();startNewGame(12)});
+  $("#result-home").addEventListener("click",goHome);
+  $("#result-replay").addEventListener("click",()=>startNewGame(state.modeScramble));
+
+  function openGuide(fromGame){
+    if(fromGame&&state.active)pauseTimer();
+    closeBottomPanels(true);closeShareSheet?.();hideFirstPlayGuide();
+    coachOpenStep(0,false);guideOverlay.dataset.fromGame=fromGame?"1":"0";root.classList.toggle("guide-from-menu",!fromGame);
+    menuOverlay.classList.add("hidden");guideOverlay.classList.remove("hidden");guideOverlay.setAttribute("aria-hidden","false");syncDrawerViewport();
+  }
+  function closeGuide(){
+    const fromGame=guideOverlay.dataset.fromGame==="1";
+    guideOverlay.classList.add("hidden");guideOverlay.setAttribute("aria-hidden","true");root.classList.remove("guide-from-menu");
+    if(fromGame&&state.active)startTimer();else if(!state.active)menuOverlay.classList.remove("hidden");syncDrawerViewport();
+  }
+  $("#guide-close").addEventListener("click",closeGuide);
+  $("#guide-overlay").addEventListener("click",e=>{if(e.target.id==="guide-overlay")closeGuide()});
+  $("#demo-pause").addEventListener("click",()=>{if(!state.demoRunning)return;state.demoPaused=!state.demoPaused;demoPause.textContent=state.demoPaused?"계속 보기":"일시정지"});
+  $("#demo-slower").addEventListener("click",()=>{state.demoSpeed=Math.max(.55,state.demoSpeed-.2);showToast(`시연 속도 ${state.demoSpeed.toFixed(1)}배`)});
+  $("#demo-faster").addEventListener("click",()=>{state.demoSpeed=Math.min(1.8,state.demoSpeed+.2);showToast(`시연 속도 ${state.demoSpeed.toFixed(1)}배`)});
+  $("#demo-stop").addEventListener("click",()=>stopAutoDemo(true));
+
+  function toggleSound(){
+    state.settings.sound=!state.settings.sound;
+    if(state.settings.sound) tactileAudio.unlock();
+    saveSettings();updateSettingsUI();
+    if(state.settings.sound)tactileAudio.turn(.82)
+  }
+  function toggleVibration(){
+    state.settings.vibration=!state.settings.vibration;
+    saveSettings();updateSettingsUI();vibrate(12);
+  }
+  soundBtn.addEventListener("click",toggleSound);
+  menuSoundBtn.addEventListener("click",toggleSound);
+  vibrationBtn.addEventListener("click",toggleVibration);
+  menuVibrationBtn.addEventListener("click",toggleVibration);
 
 
+  const BLOG_SHARE_URL="https://www.healing-mart.com/2026/07/cube-match.html";
+  const BLOG_SHARE_TITLE="3D 큐브 맞추기 - Healing Mart";
+  const BLOG_SHARE_TEXT="손으로 직접 돌리는 3D 큐브 맞추기에 도전해 보세요!";
+  function openShareSheet(){closeBottomPanels(true);shareSheet?.classList.add("show");shareSheet?.setAttribute("aria-hidden","false");syncDrawerViewport()}
+  function closeShareSheet(){shareSheet?.classList.remove("show");shareSheet?.setAttribute("aria-hidden","true");window.setTimeout(syncDrawerViewport,220)}
+  async function tryNativeShare(){
+    const data={title:BLOG_SHARE_TITLE,text:BLOG_SHARE_TEXT,url:BLOG_SHARE_URL};
+    if(typeof navigator.share!=="function")return false;
+    try{await navigator.share(data);return true}catch(error){return !!(error&&error.name==="AbortError")}
+  }
+  function openShareUrl(url){const win=window.open(url,"_blank","noopener,noreferrer");if(!win)showToast("팝업이 차단되었습니다")}
+  async function copyShareLink(){
+    try{if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(BLOG_SHARE_URL);showToast("게임 링크를 복사했습니다");return}}catch{}
+    const area=document.createElement("textarea");area.value=BLOG_SHARE_URL;area.setAttribute("readonly","");area.style.position="fixed";area.style.opacity="0";document.body.appendChild(area);area.select();try{document.execCommand("copy");showToast("게임 링크를 복사했습니다")}catch{showToast(BLOG_SHARE_URL)}area.remove();
+  }
+  async function shareCube(){if(await tryNativeShare())return;openShareSheet()}
+  async function handleShareChoice(type){
+    const u=encodeURIComponent(BLOG_SHARE_URL),t=encodeURIComponent(BLOG_SHARE_TITLE),body=encodeURIComponent(BLOG_SHARE_TITLE+"\n"+BLOG_SHARE_URL);
+    if(type==="native"){if(await tryNativeShare())closeShareSheet();else showToast("기기 공유를 사용할 수 없습니다");return}
+    if(type==="naver")openShareUrl("https://share.naver.com/web/shareView?url="+u+"&title="+t);
+    else if(type==="facebook")openShareUrl("https://www.facebook.com/sharer/sharer.php?u="+u);
+    else if(type==="x")openShareUrl("https://twitter.com/intent/tweet?url="+u+"&text="+t);
+    else if(type==="threads")openShareUrl("https://www.threads.net/intent/post?text="+body);
+    else if(type==="band")openShareUrl("https://band.us/plugin/share?body="+body);
+    else if(type==="telegram")openShareUrl("https://t.me/share/url?url="+u+"&text="+t);
+    else if(type==="copy")await copyShareLink();
+    closeShareSheet();
+  }
+  shareBtn?.addEventListener("click",shareCube);shareCloseBtn?.addEventListener("click",closeShareSheet);shareBackdrop?.addEventListener("click",closeShareSheet);
+  shareSheet?.addEventListener("click",event=>{const btn=event.target.closest("[data-share]");if(btn)handleShareChoice(btn.dataset.share)});
 
+  $("#fullscreen-btn").addEventListener("click",async()=>{
+    try{
+      if(!document.fullscreenElement) await root.requestFullscreen?.();
+      else await document.exitFullscreen?.();
+    }catch{showToast("이 브라우저에서는 전체화면을 사용할 수 없습니다")}
+  });
+
+  document.addEventListener("visibilitychange",()=>{
+    if(document.hidden){pauseTimer();if(state.demoRunning)state.demoPaused=true}
+    else if(state.active) startTimer();
+    saveGame();
+  });
+  window.addEventListener("pagehide",()=>{pauseTimer();saveGame()});
+  window.addEventListener("resize",resize,{passive:true});
+  window.addEventListener("orientationchange",()=>setTimeout(resize,180),{passive:true});
+  window.visualViewport?.addEventListener("resize",resize,{passive:true});
+  window.visualViewport?.addEventListener("scroll",resize,{passive:true});
+
+  // common game menu opens: timer pause
+  document.addEventListener("click",(e)=>{
+    if(e.target.closest("[data-hm-game-menu-open]")){pauseTimer();saveGame()}
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    updateHUD();
+    updateOrientationHud();
+    updateEffects();
+    renderer.render(scene,camera);
+  }
+
+  async function boot(){
+    syncMobileViewport();
+    renderGuide();
+    buildCube();
+    updateCamera();
+    resize();
+    loadLocal();
+    animate();
+
+    await sleep(1200);
+    launch.classList.add("hidden");
+    window.__HM_CUBE_BOOTED=true;
+    await sleep(360);
+  }
+
+  boot().catch((error)=>{
+    console.error("Cube Match boot failed",error);
+    window.__hmCubeShowFatal?.(error&&error.message?error.message:"게임 초기화 중 오류가 발생했습니다.");
+  });
+})();
+</script>
 </body>
 </html>
