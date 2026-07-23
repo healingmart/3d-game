@@ -1781,6 +1781,102 @@ html,body{width:100%;height:100%;min-height:0!important;margin:0;overflow:hidden
 }
 
 </style>
+
+<style id="v433-cube90-font-up">
+/* =========================================================
+   v4.3.3 FINAL TUNING
+   - 3D cube group is 90% of the previous size (JS)
+   - text only is raised by roughly one visual step
+   - control dimensions and layout remain unchanged
+   ========================================================= */
+.launch strong{font-size:19px!important}
+.launch small{font-size:10px!important}
+
+.commercial-start-card h1{font-size:31px!important}
+.start-subtitle{font-size:12px!important}
+.start-primary strong,.start-continue strong{font-size:18px!important}
+.start-primary span,.start-continue span{font-size:10px!important}
+.start-setting-row button,.start-guide-button,.start-solve-link{font-size:11px!important}
+.compact-records small{font-size:8.5px!important}
+.compact-records b{font-size:15px!important}
+.start-foot{font-size:9px!important}
+
+.top-home-link span{font-size:12px!important}
+.top-center-title{font-size:13px!important}
+.top-right-actions button{font-size:11px!important}
+#game-more-btn span:after{font-size:10px!important}
+
+.pill small{font-size:8px!important}
+.pill strong{font-size:15px!important}
+#center-guide{font-size:11px!important}
+
+.primary-dock button{font-size:11px!important}
+.dock-label-long,.dock-label-short{font-size:10px!important}
+.drawer-head strong,.coach-sheet-head strong{font-size:16px!important}
+.drawer-head small,.coach-sheet-head small{font-size:10px!important}
+.drawer-bottom-close,.drawer-primary{font-size:12px!important}
+.drawer-quick-actions b{font-size:12px!important}
+.drawer-quick-actions span{font-size:9.5px!important}
+.tool-sheet .face-title{font-size:9.5px!important}
+.tool-sheet .face-title b{font-size:10.5px!important}
+.tool-sheet .move-btn{font-size:8.8px!important}
+.hint-main b{font-size:17px!important}
+.hint-main p{font-size:11.5px!important}
+
+.quick-guide-head span{font-size:10px!important}
+.quick-guide-head strong{font-size:20px!important}
+.quick-guide-head p{font-size:11px!important}
+.quick-guide-item b{font-size:12px!important}
+.quick-guide-item span{font-size:10px!important}
+.quick-solve-flow>strong{font-size:11.5px!important}
+.quick-solve-flow span{font-size:9.5px!important}
+.quick-solve-flow em{font-size:10px!important}
+.quick-solve-flow p{font-size:9.5px!important}
+.guide-blog-link{font-size:10.5px!important}
+
+@media(max-width:900px){
+  .launch strong{font-size:17px!important}
+  .launch small{font-size:10px!important}
+
+  .commercial-start-card h1{font-size:26px!important}
+  .start-subtitle{font-size:10.5px!important}
+  .start-primary strong,.start-continue strong{font-size:16px!important}
+  .start-primary span,.start-continue span{font-size:10px!important}
+  .start-setting-row button,.start-guide-button,.start-solve-link{font-size:9.8px!important}
+  .compact-records small{font-size:8px!important}
+  .compact-records b{font-size:14px!important}
+
+  .top-home-link span{font-size:10px!important}
+  .top-center-title{font-size:11.5px!important}
+  .top-right-actions button{font-size:9px!important}
+  #game-more-btn span:after{font-size:9px!important}
+
+  .pill small{font-size:7px!important}
+  .pill strong{font-size:13px!important}
+
+  .primary-dock button{font-size:9.5px!important}
+  .dock-label-short{font-size:9px!important}
+  .drawer-head strong,.coach-sheet-head strong{font-size:16px!important}
+  .drawer-head small,.coach-sheet-head small{font-size:10px!important}
+  .tool-sheet .face-title{font-size:8.6px!important}
+  .tool-sheet .face-title b{font-size:9.5px!important}
+  .tool-sheet .move-btn{font-size:8px!important}
+
+  .quick-guide-head strong{font-size:18px!important}
+  .quick-guide-head p{font-size:11px!important}
+  .quick-guide-item b{font-size:11.5px!important}
+  .quick-guide-item span{font-size:9.7px!important}
+}
+
+@media(max-width:380px){
+  .commercial-start-card h1{font-size:24px!important}
+  .top-home-link span{font-size:9px!important}
+  .top-center-title{font-size:10.5px!important}
+  .top-right-actions button{font-size:8.5px!important}
+  #game-more-btn span:after{font-size:8.5px!important}
+}
+</style>
+
 </head>
 <body data-current-game="cube-match" data-game-id="cube-match">
 <div id="hm-cube-game">
@@ -2625,6 +2721,7 @@ const IS_MOBILE_DEVICE = matchMedia("(max-width:900px)").matches || /Android|iPh
 
   const cubeRoot = new THREE.Group();
   cubeRoot.position.y=0;
+  cubeRoot.scale.setScalar(.9);
   scene.add(cubeRoot);
 
   // 깨끗한 기본 큐브: 잡티 없는 검정 ABS 본체와 매끈한 6색 타일.
